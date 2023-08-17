@@ -127,9 +127,9 @@ class Transport extends TransportInterface {
 
             return;
           }
-          _closed = true;
-          safeEmit('close');
         }
+        _closed = true;
+        safeEmit('close');
       },
       onError: (object, stackTrace) {
         if (_closed) {
