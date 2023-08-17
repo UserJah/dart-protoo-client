@@ -56,8 +56,7 @@ class Transport extends TransportInterface {
     });
 
     this._ws?.onClose.listen((e) {
-      _logger.warn(
-          'WebSocket "close" event [wasClean:${e.wasClean}, code:${e.code}, reason:"${e.reason}"]');
+      _logger.warn('WebSocket "close" event [wasClean:${e.wasClean}, code:${e.code}, reason:"${e.reason}"]');
       this._closed = true;
 
       this.safeEmit('close');
