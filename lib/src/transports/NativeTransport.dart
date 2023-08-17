@@ -78,7 +78,7 @@ class Transport extends TransportInterface {
           return;
         }
 
-        final message = Message.parse(event.data);
+        final message = Message.parse(event['data']);
 
         if (message == null) {
           return;
