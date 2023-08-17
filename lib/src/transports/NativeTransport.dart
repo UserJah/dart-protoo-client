@@ -1,5 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:retry/retry.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../logger.dart';
 import '../message.dart';
@@ -11,7 +14,7 @@ class Transport extends TransportInterface {
   late bool _closed;
   late String _url;
   late dynamic _options;
-  WebSocket? _ws;
+  WebSocketChannel? _ws;
 
   Transport(String url, {dynamic options}) : super(url, options: options) {
     _logger.debug('constructor() [url:$url, options:$options]');
@@ -23,17 +26,24 @@ class Transport extends TransportInterface {
     this._runWebSocket();
   }
 
+  bool wasConnected = false;
+  int currentAttempt = 0;
+
   get closed => _closed;
 
   @override
   close() {
+    if (_closed) {
+      return;
+    }
+
     _logger.debug('close()');
 
-    this._closed = true;
-    this.safeEmit('close');
+    _closed = true;
+    safeEmit('close');
 
     try {
-      this._ws?.close();
+      _ws?.sink.close();
     } catch (error) {
       _logger.error('close() | error closing the WebSocket: $error');
     }
@@ -41,74 +51,94 @@ class Transport extends TransportInterface {
 
   @override
   Future send(message) async {
+    if (_closed) {
+      throw new Exception('transport closed');
+    }
     try {
-      this._ws?.add(jsonEncode(message));
+      _ws?.sink.add(jsonEncode(message));
     } catch (error) {
       _logger.warn('send() failed:$error');
     }
   }
 
-  _onOpen() {
-    _logger.debug('onOpen');
-    this.safeEmit('open');
-  }
-
-  // _onClose(event) {
-  //   logger.warn(
-  //       'WebSocket "close" event [wasClean:${e.wasClean}, code:${e.code}, reason:"${e.reason}"]');
-  //   this._closed = true;
-
-  //   this.safeEmit('close');
-  // }
-
-  _onError(err) {
-    _logger.error('WebSocket "error" event');
-  }
-
   _runWebSocket() async {
-    WebSocket.connect(this._url, protocols: ['protoo']).then((ws) {
-      if (ws.readyState == WebSocket.open) {
-        this._ws = ws;
-        _onOpen();
+    _ws = IOWebSocketChannel.connect(Uri.parse(_url), protocols: ['protoo']);
 
-        ws.listen((event) {
-          final message = Message.parse(event);
-
-          if (message == null) return;
-
-          this.safeEmit('message', message);
-        }, onError: _onError);
-      } else {
-        _logger.warn(
-            'WebSocket "close" event code:${ws.closeCode}, reason:"${ws.closeReason}"]');
-        this._closed = true;
-
-        this.safeEmit('close');
+    await _ws?.ready.then((value) {
+      if (_closed) {
+        return;
       }
+
+      wasConnected = true;
+      safeEmit('open');
     });
-    // this._ws.listen((e) {
-    //   logger.debug('onOpen');
-    //   this.safeEmit('open');
-    // });
 
-    // this._ws.onClose.listen((e) {
-    //   logger.warn(
-    //       'WebSocket "close" event [wasClean:${e.wasClean}, code:${e.code}, reason:"${e.reason}"]');
-    //   this._closed = true;
+    _ws?.stream.listen(
+      (event) {
+        if (_closed) {
+          return;
+        }
 
-    //   this.safeEmit('close');
-    // });
+        final message = Message.parse(event.data);
 
-    // this._ws.onError.listen((e) {
-    //   logger.error('WebSocket "error" event');
-    // });
+        if (message == null) {
+          return;
+        }
 
-    // this._ws.onMessage.listen((e) {
-    //   final message = Message.parse(e.data);
+        if (listeners('message').length == 0) {
+          logger.error('no listeners for WebSocket "message" event, ignoring received message');
 
-    //   if (message == null) return;
+          return;
+        }
 
-    //   this.safeEmit('message', message);
-    // });
+        safeEmit('message', message);
+      },
+      onDone: () {
+        if (_closed) {
+          return;
+        }
+
+        logger.warn(
+            'WebSocket "close" event [wasClean:%s, code:%s, reason:"%s"], ${_ws?.closeCode}, ${_ws?.closeReason}');
+
+        // Don't retry if code is 4000 (closed by the server).
+        if (_ws?.closeCode != 4000) {
+          if (!wasConnected) {
+            safeEmit('failed', {'currentAttempt': currentAttempt});
+
+            if (_closed) return;
+
+            retry(
+              () {
+                currentAttempt++;
+                if (currentAttempt == 8) {
+                  currentAttempt = 0;
+                }
+                _runWebSocket();
+              },
+            );
+          }
+          // If it was connected, start from scratch.
+          else {
+            safeEmit('disconnected');
+
+            if (_closed) return;
+
+            _runWebSocket();
+
+            return;
+          }
+          _closed = true;
+          safeEmit('close');
+        }
+      },
+      onError: (object, stackTrace) {
+        if (_closed) {
+          return;
+        }
+
+        logger.error('WebSocket "error" event ${object} ${stackTrace}');
+      },
+    );
   }
 }
