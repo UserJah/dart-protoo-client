@@ -4,8 +4,7 @@ import 'EnhancedEventEmitter.dart';
 import 'logger.dart';
 import 'message.dart';
 import 'transports/TransportInterface.dart';
-export 'transports/NativeTransport.dart'
-    if (dart.library.html) 'transports/WebTransport.dart';
+export 'transports/NativeTransport.dart' if (dart.library.html) 'transports/WebTransport.dart';
 
 final logger = new Logger('Peer');
 
@@ -81,8 +80,7 @@ class Peer extends EnhancedEventEmitter {
     final completer = new Completer();
     final request = Message.createRequest(method, data);
     final requestId = request['id'].toString();
-    logger.debug(
-        'request() [method:' + method.toString() + ', id: ' + requestId + ']');
+    logger.debug('request() [method:' + method.toString() + ', id: ' + requestId + ']');
 
     // This may throw.
     await this._transport.send(request);
@@ -101,8 +99,7 @@ class Peer extends EnhancedEventEmitter {
           sent?.timer.cancel();
           completer.completeError(error);
         },
-        timer: new Timer.periodic(new Duration(milliseconds: timeout),
-            (Timer timer) {
+        timer: new Timer.periodic(new Duration(milliseconds: timeout), (Timer timer) {
           if (this._sents.remove(requestId) == null) return;
           completer.completeError('request timeout');
         }),
@@ -156,7 +153,7 @@ class Peer extends EnhancedEventEmitter {
 
     _transport.on('failed', (currentAttempt) {
       if (_closed) return;
-      logger.debug('emit "failed" [currentAttempt:' + currentAttempt + ']');
+      logger.debug('emit "failed" [currentAttempt:' + currentAttempt.toString() + ']');
 
       this._connected = false;
 
@@ -178,8 +175,7 @@ class Peer extends EnhancedEventEmitter {
         _handleRequest(message);
       } else if (message['response'] != null && message['response'] == true) {
         _handleResponse(message);
-      } else if (message['notification'] != null &&
-          message['notification'] == true) {
+      } else if (message['notification'] != null && message['notification'] == true) {
         _handleNotification(message);
       }
     });
@@ -204,16 +200,14 @@ class Peer extends EnhancedEventEmitter {
           errorReason = errorReason.toString();
         }
 
-        final response =
-            Message.createErrorResponse(request, errorCode, errorReason);
+        final response = Message.createErrorResponse(request, errorCode, errorReason);
 
         _transport.send(response).catchError((error) {
           logger.warn('reject() failed, response could not be sent: ' + error);
         });
       });
     } catch (error) {
-      final response =
-          Message.createErrorResponse(request, 500, error.toString());
+      final response = Message.createErrorResponse(request, 500, error.toString());
 
       this._transport.send(response).catchError(() => {});
     }
@@ -229,10 +223,7 @@ class Peer extends EnhancedEventEmitter {
     if (response['ok'] != null && response['ok'] == true) {
       sent.resolve(response['data']);
     } else {
-      var error = {
-        'code': response['errorCode'] ?? 500,
-        'error': response['errorReason'] ?? ''
-      };
+      var error = {'code': response['errorCode'] ?? 500, 'error': response['errorReason'] ?? ''};
       sent.reject(error);
     }
   }

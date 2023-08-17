@@ -8,7 +8,7 @@ Logger _logger = Logger('EnhancedEventEmitter');
 
 class EnhancedEventEmitter extends EventEmitter {
   EnhancedEventEmitter() : super();
-  void safeEmit(String event, [Map<String, dynamic>? args]) {
+  void safeEmit(String event, [dynamic args]) {
     try {
       emit(event, args);
     } catch (error) {
@@ -18,8 +18,7 @@ class EnhancedEventEmitter extends EventEmitter {
     }
   }
 
-  Future<dynamic> safeEmitAsFuture(String event,
-      [Map<String, dynamic>? args]) async {
+  Future<dynamic> safeEmitAsFuture(String event, [Map<String, dynamic>? args]) async {
     try {
       return emitAsFuture(event, args);
     } catch (error) {

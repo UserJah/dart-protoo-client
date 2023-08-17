@@ -61,7 +61,8 @@ class Transport extends TransportInterface {
   }
 
   _runWebSocket() async {
-    _ws = IOWebSocketChannel.connect(Uri.parse(_url), protocols: ['protoo']);
+    _ws =
+        IOWebSocketChannel.connect(Uri.parse(_url), protocols: ['protoo'], connectTimeout: const Duration(seconds: 5));
 
     await _ws?.ready.then((value) {
       if (_closed) {
@@ -69,7 +70,11 @@ class Transport extends TransportInterface {
       }
 
       wasConnected = true;
+      currentAttempt = 0;
       safeEmit('open');
+    }).catchError((error) {
+      logger.error(error.toString());
+      wasConnected = false;
     });
 
     _ws?.stream.listen(
@@ -92,7 +97,7 @@ class Transport extends TransportInterface {
 
         safeEmit('message', message);
       },
-      onDone: () {
+      onDone: () async {
         if (_closed) {
           return;
         }
@@ -101,27 +106,31 @@ class Transport extends TransportInterface {
             'WebSocket "close" event [wasClean:%s, code:%s, reason:"%s"], ${_ws?.closeCode}, ${_ws?.closeReason}');
 
         // Don't retry if code is 4000 (closed by the server).
-        if (_ws?.closeCode != 4000) {
+        if (_ws?.closeCode == null || _ws?.closeCode != 4000) {
           if (!wasConnected) {
-            safeEmit('failed', {'currentAttempt': currentAttempt});
+            safeEmit('failed', currentAttempt);
 
             if (_closed) return;
 
-            retry(
-              () {
-                currentAttempt++;
-                if (currentAttempt == 8) {
-                  currentAttempt = 0;
-                }
-                _runWebSocket();
-              },
-            );
+            currentAttempt++;
+
+            if (currentAttempt <= 8) {
+              await Future.delayed(Duration(seconds: 5), () => _runWebSocket());
+            } else {
+              _closed = true;
+              safeEmit('close');
+              currentAttempt = 0;
+            }
+
+            return;
           }
           // If it was connected, start from scratch.
           else {
             safeEmit('disconnected');
 
-            if (_closed) return;
+            if (_closed) {
+              return;
+            }
 
             _runWebSocket();
 
