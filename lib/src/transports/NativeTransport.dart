@@ -61,8 +61,11 @@ class Transport extends TransportInterface {
   }
 
   _runWebSocket() async {
-    _ws =
-        IOWebSocketChannel.connect(Uri.parse(_url), protocols: ['protoo'], connectTimeout: const Duration(seconds: 5));
+    _ws = IOWebSocketChannel.connect(
+      Uri.parse(_url),
+      protocols: ['protoo'],
+      connectTimeout: const Duration(milliseconds: 500),
+    );
 
     await _ws?.ready.then((value) {
       if (_closed) {
