@@ -12,14 +12,16 @@ class Transport extends TransportInterface {
   late bool _closed;
   late String _url;
   late dynamic _options;
+  late int _maxReconnectAttempts;
   WebSocketChannel? _ws;
 
-  Transport(String url, {dynamic options}) : super(url, options: options) {
+  Transport(String url, {dynamic options, int maxReconnectAttempts = 8}) : super(url, options: options) {
     _logger.debug('constructor() [url:$url, options:$options]');
     this._closed = false;
     this._url = url;
     this._options = options ?? {};
     this._ws = null;
+    this._maxReconnectAttempts = maxReconnectAttempts;
 
     this._runWebSocket();
   }
@@ -116,7 +118,7 @@ class Transport extends TransportInterface {
 
             currentAttempt++;
 
-            if (currentAttempt <= 8) {
+            if (currentAttempt <= _maxReconnectAttempts) {
               await Future.delayed(Duration(seconds: 5), () => _runWebSocket());
             } else {
               _closed = true;
