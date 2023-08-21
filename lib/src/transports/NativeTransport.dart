@@ -65,7 +65,7 @@ class Transport extends TransportInterface {
     _ws = IOWebSocketChannel.connect(
       Uri.parse(_url),
       protocols: ['protoo'],
-      connectTimeout: const Duration(milliseconds: 500),
+      pingInterval: const Duration(milliseconds: 500),
     );
 
     await _ws?.ready.then((value) {
