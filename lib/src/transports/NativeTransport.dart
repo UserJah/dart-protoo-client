@@ -66,6 +66,7 @@ class Transport extends TransportInterface {
       Uri.parse(_url),
       protocols: ['protoo'],
       pingInterval: const Duration(seconds: 5),
+      connectTimeout: const Duration(seconds: 5),
     );
 
     await _ws?.ready.then((value) {
